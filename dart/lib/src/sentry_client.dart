@@ -17,7 +17,6 @@ import 'sentry_exception_factory.dart';
 import 'sentry_options.dart';
 import 'sentry_stack_trace_factory.dart';
 import 'sentry_trace_context_header.dart';
-import 'sentry_user_feedback.dart';
 import 'transport/client_report_transport.dart';
 import 'transport/data_category.dart';
 import 'transport/http_transport.dart';
@@ -34,6 +33,9 @@ import 'version.dart';
 /// a user and IP address. Only applies if [SentryOptions.sendDefaultPii] is set
 /// to true.
 const _defaultIpAddress = '{{auto}}';
+
+@visibleForTesting
+String get defaultIpAddress => _defaultIpAddress;
 
 /// Logs crash reports and events to the Sentry.io service.
 class SentryClient {
@@ -63,11 +65,11 @@ class SentryClient {
       options,
       options.transport,
     );
-    // TODO: Web might change soon to use the JS SDK so we can remove it here later on
+    // TODO: Use spotlight integration directly through JS SDK, then we can remove isWeb check
     final enableFlutterSpotlight = (options.spotlight.enabled &&
-        (options.platformChecker.isWeb ||
-            options.platformChecker.platform.isLinux ||
-            options.platformChecker.platform.isWindows));
+        (options.platform.isWeb ||
+            options.platform.isLinux ||
+            options.platform.isWindows));
     // Spotlight in the Flutter layer is only enabled for Web, Linux and Windows
     // Other platforms use spotlight through their native SDKs
     if (enableFlutterSpotlight) {
@@ -212,7 +214,7 @@ class SentryClient {
       environment: event.environment ?? _options.environment,
       release: event.release ?? _options.release,
       sdk: event.sdk ?? _options.sdk,
-      platform: event.platform ?? sdkPlatform(_options.platformChecker.isWeb),
+      platform: event.platform ?? sdkPlatform(_options.platform.isWeb),
     );
 
     if (event is SentryTransaction) {
@@ -247,7 +249,7 @@ class SentryClient {
 
         SentryThread? sentryThread;
 
-        if (!_options.platformChecker.isWeb &&
+        if (!_options.platform.isWeb &&
             isolateName != null &&
             _options.attachThreads) {
           sentryException = sentryException.copyWith(threadId: isolateId);
@@ -304,12 +306,18 @@ class SentryClient {
   }
 
   SentryEvent _createUserOrSetDefaultIpAddress(SentryEvent event) {
-    var user = event.user;
-    if (user == null) {
-      return event.copyWith(user: SentryUser(ipAddress: _defaultIpAddress));
-    } else if (event.user?.ipAddress == null) {
-      return event.copyWith(user: user.copyWith(ipAddress: _defaultIpAddress));
+    final user = event.user;
+    final effectiveIpAddress =
+        user?.ipAddress ?? (_options.sendDefaultPii ? _defaultIpAddress : null);
+
+    if (effectiveIpAddress != null) {
+      final updatedUser = user == null
+          ? SentryUser(ipAddress: effectiveIpAddress)
+          : user.copyWith(ipAddress: effectiveIpAddress);
+
+      return event.copyWith(user: updatedUser);
     }
+
     return event;
   }
 
@@ -356,8 +364,9 @@ class SentryClient {
     SentryTransaction transaction, {
     Scope? scope,
     SentryTraceContextHeader? traceContext,
+    Hint? hint,
   }) async {
-    final hint = Hint();
+    hint ??= Hint();
 
     SentryTransaction? preparedTransaction =
         _prepareEvent(transaction, hint) as SentryTransaction;
@@ -443,18 +452,6 @@ class SentryClient {
     return _options.transport.send(envelope);
   }
 
-  /// Reports the [userFeedback] to Sentry.io.
-  @Deprecated(
-      'Will be removed in a future version. Use [captureFeedback] instead')
-  Future<void> captureUserFeedback(SentryUserFeedback userFeedback) {
-    final envelope = SentryEnvelope.fromUserFeedback(
-      userFeedback,
-      _options.sdk,
-      dsn: _options.dsn,
-    );
-    return _options.transport.send(envelope);
-  }
-
   /// Reports the [feedback] to Sentry.io.
   Future<SentryId> captureFeedback(
     SentryFeedback feedback, {
@@ -494,7 +491,7 @@ class SentryClient {
     try {
       if (event is SentryTransaction && beforeSendTransaction != null) {
         beforeSendName = 'beforeSendTransaction';
-        final callbackResult = beforeSendTransaction(event);
+        final callbackResult = beforeSendTransaction(event, hint);
         if (callbackResult is Future<SentryTransaction?>) {
           processedEvent = await callbackResult;
         } else {
@@ -555,7 +552,7 @@ class SentryClient {
 
   bool _sampleRate() {
     if (_options.sampleRate != null && _random != null) {
-      return (_options.sampleRate! < _random!.nextDouble());
+      return (_options.sampleRate! < _random.nextDouble());
     }
     return false;
   }

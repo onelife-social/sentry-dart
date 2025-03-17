@@ -173,7 +173,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Chrome Browser
-        uses: browser-actions/setup-chrome@facf10a55b9caf92e0cc749b4f82bf8220989148 # pin@v1.7.2
+        uses: browser-actions/setup-chrome@c785b87e244131f27c9f19c1a33e2ead956ab7ce # pin@v1.7.3
         with:
           chrome-version: stable
       - run: chrome --version
@@ -181,9 +181,6 @@ jobs:
       - uses: subosito/flutter-action@f2c4f6686ca8e8d6e6d0f28410eeef506ed66aff # pin@v2.18.0
         with:
           channel: ${{ matrix.sdk }}
-
-      - name: flutter upgrade
-        run: flutter upgrade
 
       - name: flutter pub get
         run: flutter pub get
@@ -204,10 +201,10 @@ jobs:
           # Start Xvfb with specific screen settings
           Xvfb -ac :99 -screen 0 1280x1024x16 &
           export DISPLAY=:99
-          
+
           # Start ChromeDriver
           chromedriver --port=4444 &
-          
+
           # Wait for services to start
           sleep 5
 

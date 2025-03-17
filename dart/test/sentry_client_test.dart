@@ -6,6 +6,7 @@ import 'package:collection/collection.dart';
 import 'package:sentry/sentry.dart';
 import 'package:sentry/src/client_reports/discard_reason.dart';
 import 'package:sentry/src/client_reports/noop_client_report_recorder.dart';
+import 'package:sentry/src/platform/mock_platform.dart';
 import 'package:sentry/src/sentry_item_type.dart';
 import 'package:sentry/src/sentry_stack_trace_factory.dart';
 import 'package:sentry/src/sentry_tracer.dart';
@@ -19,8 +20,6 @@ import 'package:test/test.dart';
 import 'mocks.dart';
 import 'mocks/mock_client_report_recorder.dart';
 import 'mocks/mock_hub.dart';
-import 'mocks/mock_platform.dart';
-import 'mocks/mock_platform_checker.dart';
 import 'mocks/mock_transport.dart';
 import 'test_utils.dart';
 
@@ -1003,16 +1002,17 @@ void main() {
     });
   });
 
-  group('SentryClient: sets user & user ip', () {
+  group('SentryClient: user & user ip', () {
     late Fixture fixture;
 
     setUp(() {
       fixture = Fixture();
     });
 
-    test('event has no user', () async {
+    test('event has no user and sendDefaultPii = true', () async {
       final client = fixture.getSut(sendDefaultPii: true);
       var fakeEvent = SentryEvent();
+      expect(fakeEvent.user, isNull);
 
       await client.captureEvent(fakeEvent);
 
@@ -1021,12 +1021,27 @@ void main() {
 
       expect(fixture.transport.envelopes.length, 1);
       expect(capturedEvent.user, isNotNull);
-      expect(capturedEvent.user?.ipAddress, '{{auto}}');
+      expect(capturedEvent.user?.ipAddress, defaultIpAddress);
+    });
+
+    test('event has no user and sendDefaultPii = false', () async {
+      final client = fixture.getSut(sendDefaultPii: false);
+      var fakeEvent = SentryEvent();
+      expect(fakeEvent.user, isNull);
+
+      await client.captureEvent(fakeEvent);
+
+      final capturedEnvelope = fixture.transport.envelopes.first;
+      final capturedEvent = await eventFromEnvelope(capturedEnvelope);
+
+      expect(fixture.transport.envelopes.length, 1);
+      expect(capturedEvent.user, isNull);
     });
 
     test('event has a user with IP address', () async {
       final client = fixture.getSut(sendDefaultPii: true);
 
+      expect(fakeEvent.user?.ipAddress, isNotNull);
       await client.captureEvent(fakeEvent);
 
       final capturedEnvelope = fixture.transport.envelopes.first;
@@ -1040,10 +1055,12 @@ void main() {
       expect(capturedEvent.user?.email, fakeEvent.user!.email);
     });
 
-    test('event has a user without IP address', () async {
+    test('event has a user without IP address and sendDefaultPii = true',
+        () async {
       final client = fixture.getSut(sendDefaultPii: true);
 
       final event = fakeEvent.copyWith(user: fakeUser);
+      expect(event.user?.ipAddress, isNull);
 
       await client.captureEvent(event);
 
@@ -1052,7 +1069,26 @@ void main() {
 
       expect(fixture.transport.envelopes.length, 1);
       expect(capturedEvent.user, isNotNull);
-      expect(capturedEvent.user?.ipAddress, '{{auto}}');
+      expect(capturedEvent.user?.ipAddress, defaultIpAddress);
+      expect(capturedEvent.user?.id, fakeUser.id);
+      expect(capturedEvent.user?.email, fakeUser.email);
+    });
+
+    test('event has a user without IP address and sendDefaultPii = false',
+        () async {
+      final client = fixture.getSut(sendDefaultPii: false);
+
+      final event = fakeEvent.copyWith(user: fakeUser);
+      expect(event.user?.ipAddress, isNull);
+
+      await client.captureEvent(event);
+
+      final capturedEnvelope = fixture.transport.envelopes.first;
+      final capturedEvent = await eventFromEnvelope(capturedEnvelope);
+
+      expect(fixture.transport.envelopes.length, 1);
+      expect(capturedEvent.user, isNotNull);
+      expect(capturedEvent.user?.ipAddress, isNull);
       expect(capturedEvent.user?.id, fakeUser.id);
       expect(capturedEvent.user?.email, fakeUser.email);
     });
@@ -1367,7 +1403,8 @@ void main() {
     test('thrown error is handled', () async {
       fixture.options.automatedTestMode = false;
       final exception = Exception("before send exception");
-      final beforeSendTransactionCallback = (SentryTransaction event) {
+      final beforeSendTransactionCallback =
+          (SentryTransaction event, Hint hint) {
         throw exception;
       };
 
@@ -1766,7 +1803,7 @@ void main() {
       fixture.tracer.startChild('child2');
       fixture.tracer.startChild('child3');
 
-      fixture.options.beforeSendTransaction = (transaction) {
+      fixture.options.beforeSendTransaction = (transaction, hint) {
         if (transaction.tracer == fixture.tracer) {
           return null;
         }
@@ -1793,7 +1830,7 @@ void main() {
       fixture.tracer.startChild('child2');
       fixture.tracer.startChild('child3');
 
-      fixture.options.beforeSendTransaction = (transaction) {
+      fixture.options.beforeSendTransaction = (transaction, hint) {
         if (transaction.tracer == fixture.tracer) {
           transaction.spans
               .removeWhere((element) => element.context.operation == 'child2');
@@ -1856,22 +1893,6 @@ void main() {
       expect(
           fixture.recorder.discardedEvents.first.category, DataCategory.error);
     });
-
-    test('user feedback envelope contains dsn', () async {
-      final client = fixture.getSut();
-      final event = SentryEvent();
-      // ignore: deprecated_member_use_from_same_package
-      final feedback = SentryUserFeedback(
-        eventId: event.eventId,
-        name: 'test',
-      );
-      // ignore: deprecated_member_use_from_same_package
-      await client.captureUserFeedback(feedback);
-
-      final capturedEnvelope = (fixture.transport).envelopes.first;
-
-      expect(capturedEnvelope.header.dsn, fixture.options.dsn);
-    });
   });
 
   group('Spotlight', () {
@@ -1884,9 +1905,7 @@ void main() {
     test(
         'Spotlight enabled should not set transport to SpotlightHttpTransport on iOS',
         () async {
-      fixture.options.platformChecker = MockPlatformChecker(
-        platform: MockPlatform.iOS(),
-      );
+      fixture.options.platform = MockPlatform.iOS();
       fixture.options.spotlight = Spotlight(enabled: true);
       fixture.getSut();
 
@@ -1896,9 +1915,7 @@ void main() {
     test(
         'Spotlight enabled should not set transport to SpotlightHttpTransport on macOS',
         () async {
-      fixture.options.platformChecker = MockPlatformChecker(
-        platform: MockPlatform.macOS(),
-      );
+      fixture.options.platform = MockPlatform.macOS();
       fixture.options.spotlight = Spotlight(enabled: true);
       fixture.getSut();
 
@@ -1908,9 +1925,7 @@ void main() {
     test(
         'Spotlight enabled should not set transport to SpotlightHttpTransport on Android',
         () async {
-      fixture.options.platformChecker = MockPlatformChecker(
-        platform: MockPlatform.android(),
-      );
+      fixture.options.platform = MockPlatform.android();
       fixture.options.spotlight = Spotlight(enabled: true);
       fixture.getSut();
 
@@ -1920,7 +1935,7 @@ void main() {
     test(
         'Spotlight enabled should set transport to SpotlightHttpTransport on Web',
         () async {
-      fixture.options.platformChecker = MockPlatformChecker(isWebValue: true);
+      fixture.options.platform = MockPlatform(isWeb: true);
       fixture.options.spotlight = Spotlight(enabled: true);
       fixture.getSut();
 
@@ -1930,8 +1945,7 @@ void main() {
     test(
         'Spotlight enabled should set transport to SpotlightHttpTransport on Linux',
         () async {
-      fixture.options.platformChecker =
-          MockPlatformChecker(platform: MockPlatform.linux());
+      fixture.options.platform = MockPlatform.linux();
       fixture.options.spotlight = Spotlight(enabled: true);
       fixture.getSut();
 
@@ -1941,8 +1955,7 @@ void main() {
     test(
         'Spotlight enabled should set transport to SpotlightHttpTransport on Windows',
         () async {
-      fixture.options.platformChecker =
-          MockPlatformChecker(platform: MockPlatform.windows());
+      fixture.options.platform = MockPlatform.windows();
       fixture.options.spotlight = Spotlight(enabled: true);
       fixture.getSut();
 
@@ -2042,6 +2055,33 @@ void main() {
       );
       expect(attachmentItem?.header.attachmentType,
           SentryAttachment.typeAttachmentDefault);
+    });
+
+    test('captureTransaction hint passed to beforeSendTransaction', () async {
+      final sut = fixture.getSut();
+
+      final hint = Hint();
+      final transaction = SentryTransaction(fixture.tracer);
+
+      fixture.options.beforeSendTransaction = (bsTransaction, bsHint) async {
+        expect(hint, bsHint);
+        return bsTransaction;
+      };
+
+      await sut.captureTransaction(transaction, hint: hint);
+    });
+
+    test('captureTransaction hint passed to event processors', () async {
+      final hint = Hint();
+
+      final eventProcessor = FunctionEventProcessor((event, epHint) {
+        expect(epHint, hint);
+        return event;
+      });
+      final sut = fixture.getSut(eventProcessor: eventProcessor);
+
+      final transaction = SentryTransaction(fixture.tracer);
+      await sut.captureTransaction(transaction, hint: hint);
     });
 
     test('captureEvent adds screenshot from hint', () async {
@@ -2196,6 +2236,7 @@ Future<SentryEvent?> asyncBeforeSendFeedbackCallbackDropEvent(
 
 SentryTransaction? beforeSendTransactionCallbackDropEvent(
   SentryTransaction event,
+  Hint hint,
 ) =>
     null;
 
@@ -2208,7 +2249,9 @@ Future<SentryEvent?> asyncBeforeSendCallbackDropEvent(
 }
 
 Future<SentryTransaction?> asyncBeforeSendTransactionCallbackDropEvent(
-    SentryEvent event) async {
+  SentryEvent event,
+  Hint hint,
+) async {
   await Future.delayed(Duration(milliseconds: 200));
   return null;
 }
@@ -2230,7 +2273,9 @@ SentryEvent? beforeSendCallback(SentryEvent event, Hint hint) {
 }
 
 SentryTransaction? beforeSendTransactionCallback(
-    SentryTransaction transaction) {
+  SentryTransaction transaction,
+  Hint hint,
+) {
   return transaction
     ..tags!.addAll({'theme': 'material'})
     // ignore: deprecated_member_use_from_same_package
@@ -2244,8 +2289,7 @@ class Fixture {
   final recorder = MockClientReportRecorder();
   final transport = MockTransport();
 
-  final options =
-      defaultTestOptions(MockPlatformChecker(platform: MockPlatform.iOS()));
+  final options = defaultTestOptions()..platform = MockPlatform.iOS();
 
   late SentryTransactionContext _context;
   late SentryTracer tracer;

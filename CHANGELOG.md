@@ -2,21 +2,250 @@
 
 ## Unreleased
 
+- Move replay and privacy from experimental to options ([#2755](https://github.com/getsentry/sentry-dart/pull/2755))
+- Remove renderer from `flutter_context` ([#2751](https://github.com/getsentry/sentry-dart/pull/2751))
+- Cleanup platform mocking ([#2730](https://github.com/getsentry/sentry-dart/pull/2730))
+  - The `PlatformChecker` was renamed to `RuntimeChecker`
+  - Moved `PlatformChecker.platform` to `options.platform`
+
+## 8.14.0
+
+This release fixes an issue where Cold starts can be incorrectly reported as Warm starts on Android.
+
+### Behavioral changes
+
+- ⚠️ Auto IP assignment for `SentryUser` is now guarded by `sendDefaultPii` ([#2726](https://github.com/getsentry/sentry-dart/pull/2726))
+  - If you rely on Sentry automatically processing the IP address of the user, set `options.sendDefaultPii = true` or manually set the IP address of the `SentryUser` to `{{auto}}`
+- Adding the device name to Contexts is now guarded by `sendDefaultPii` ([#2741](https://github.com/getsentry/sentry-dart/pull/2741))
+  - Set `options.sendDefaultPii = true` if you want to have the device name reported
+- Remove macOS display refresh rate support ([#2628](https://github.com/getsentry/sentry-dart/pull/2628))
+  - Can't reliably detect on multi-monitor systems and on older macOS versions.
+  - Not very meaningful, as other applications may be running in parallel and affecting it.
+
 ### Enhancements
 
+- Add Flutter runtime information ([#2742](https://github.com/getsentry/sentry-dart/pull/2742))
+  - This works if the version of Flutter you're using includes [this code](https://github.com/flutter/flutter/pull/163761).
+- Use `loadDebugImagesForAddresses` API for Android ([#2706](https://github.com/getsentry/sentry-dart/pull/2706))
+  - This reduces the envelope size and data transferred across method channels
+  - If debug images received by `loadDebugImagesForAddresses` are empty, the SDK loads all debug images as fallback
+- Disable `ScreenshotIntegration`, `WidgetsBindingIntegration` and `SentryWidget` in multi-view apps #2366 ([#2366](https://github.com/getsentry/sentry-dart/pull/2366))
+
+### Fixes
+
+- Pass missing `captureFailedRequests` param to `FailedRequestInterceptor` ([#2744](https://github.com/getsentry/sentry-dart/pull/2744))
+- Bind root screen transaction to scope ([#2756](https://github.com/getsentry/sentry-dart/pull/2756))
+- Reference to `SentryWidgetsFlutterBinding` in warning message in `FramesTrackingIntegration` ([#2704](https://github.com/getsentry/sentry-dart/pull/2704))
+
+### Deprecations
+
+- Deprecate Drift `SentryQueryExecutor` ([#2715](https://github.com/getsentry/sentry-dart/pull/2715))
+  - This will be replace by `SentryQueryInterceptor` in the next major v9
+```dart
+// Example usage in Sentry Flutter v9
+final executor = NativeDatabase.memory().interceptWith(
+  SentryQueryInterceptor(databaseName: 'your_db_name'),
+);
+
+final db = AppDatabase(executor);
+```
+- Deprecate `autoAppStart` and `setAppStartEnd` ([#2681](https://github.com/getsentry/sentry-dart/pull/2681))
+
+### Dependencies
+
+- Bump Native SDK from v0.7.19 to v0.7.20 ([#2652](https://github.com/getsentry/sentry-dart/pull/2652))
+  - [changelog](https://github.com/getsentry/sentry-native/blob/master/CHANGELOG.md#0720)
+  - [diff](https://github.com/getsentry/sentry-native/compare/0.7.19...0.7.20)
+- Bump Cocoa SDK from v8.44.0 to v8.46.0 ([#2772](https://github.com/getsentry/sentry-dart/pull/2772))
+  - [changelog](https://github.com/getsentry/sentry-cocoa/blob/main/CHANGELOG.md#8460)
+  - [diff](https://github.com/getsentry/sentry-cocoa/compare/8.44.0...8.46.0)
+
+## 9.0.0-alpha.1
+
+### Breaking changes
+
+- Remove `SentryDisplayWidget` and manual TTID implementation ([#2668](https://github.com/getsentry/sentry-dart/pull/2668))
+- Increase minimum SDK version requirements to Dart v3.5.0 and Flutter v3.24.0 ([#2643](https://github.com/getsentry/sentry-dart/pull/2643))
+- Remove screenshot option `attachScreenshotOnlyWhenResumed` ([#2664](https://github.com/getsentry/sentry-dart/pull/2664))
+- Remove deprecated `beforeScreenshot` ([#2662](https://github.com/getsentry/sentry-dart/pull/2662))
+- Remove old user feedback api ([#2686](https://github.com/getsentry/sentry-dart/pull/2686))
+- Remove deprecated loggers ([#2685](https://github.com/getsentry/sentry-dart/pull/2685))
+- Remove user segment ([#2687](https://github.com/getsentry/sentry-dart/pull/2687))
+- Enable JS SDK native integration by default ([#2688](https://github.com/getsentry/sentry-dart/pull/2688))
+- Remove `enableTracing` ([#2695](https://github.com/getsentry/sentry-dart/pull/2695))
+- Remove `options.autoAppStart` and `setAppStartEnd` ([#2680](https://github.com/getsentry/sentry-dart/pull/2680))
+- Bump Drift min version to `2.24.0` and use `QueryInterceptor` instead of `QueryExecutor` ([#2679](https://github.com/getsentry/sentry-dart/pull/2679))
+- Add hint for transactions ([#2675](https://github.com/getsentry/sentry-dart/pull/2675))
+  - `BeforeSendTransactionCallback` now has a `Hint` parameter
+- Remove `dart:html` usage in favour of `package:web` ([#2710](https://github.com/getsentry/sentry-dart/pull/2710))
+- Remove max response body size ([#2709](https://github.com/getsentry/sentry-dart/pull/2709))
+  - Responses are now only attached if size is below ~0.15mb
+  - Responses are attached to the `Hint` object, which can be read in `beforeSend`/`beforeSendTransaction` callbacks via `hint.response`.
+  - For now, only the `dio` integration is supported.
+- Enable privacy masking for screenshots by default ([#2728](https://github.com/getsentry/sentry-dart/pull/2728))
+  
+### Enhancements
+
+- Replay: improve Android native interop performance by using JNI ([#2670](https://github.com/getsentry/sentry-dart/pull/2670))
+
+### Dependencies
+
+- Bump Android SDK from v7.20.1 to v8.1.0 ([#2650](https://github.com/getsentry/sentry-dart/pull/2650))
+  - [changelog](https://github.com/getsentry/sentry-java/blob/main/CHANGELOG.md#810)
+  - [diff](https://github.com/getsentry/sentry-java/compare/7.20.1...8.1.0)
+
+## 8.14.0-beta.1
+
+### Behavioral changes
+
+- ⚠️ Auto IP assignment for `SentryUser` is now guarded by `sendDefaultPii` ([#2726](https://github.com/getsentry/sentry-dart/pull/2726))
+  - If you rely on Sentry automatically processing the IP address of the user, set `options.sendDefaultPii = true` or manually set the IP address of the `SentryUser` to `{{auto}}`
+- Adding the device name to Contexts is now guarded by `sendDefaultPii` ([#2741](https://github.com/getsentry/sentry-dart/pull/2741))
+  - Set `options.sendDefaultPii = true` if you want to have the device name reported
+
+### Features
+
+- Disable `ScreenshotIntegration`, `WidgetsBindingIntegration` and `SentryWidget` in multi-view apps #2366 ([#2366](https://github.com/getsentry/sentry-dart/pull/2366))
+
+### Enhancements
+
+- Use `loadDebugImagesForAddresses` API for Android ([#2706](https://github.com/getsentry/sentry-dart/pull/2706))
+  - This reduces the envelope size and data transferred across method channels
+  - If debug images received by `loadDebugImagesForAddresses` are empty, the SDK loads all debug images as fallback
+
+### Fixes
+
+- Reference to `SentryWidgetsFlutterBinding` in warning message in `FramesTrackingIntegration` ([#2704](https://github.com/getsentry/sentry-dart/pull/2704))
+
+### Deprecations
+
+- Deprecate Drift `SentryQueryExecutor` ([#2715](https://github.com/getsentry/sentry-dart/pull/2715))
+  - This will be replace by `SentryQueryInterceptor` in the next major v9
+```dart
+// Example usage in Sentry Flutter v9
+final executor = NativeDatabase.memory().interceptWith(
+  SentryQueryInterceptor(databaseName: 'your_db_name'),
+);
+
+final db = AppDatabase(executor);
+```
+- Deprecate `autoAppStart` and `setAppStartEnd` ([#2681](https://github.com/getsentry/sentry-dart/pull/2681))
+
+### Other
+
+- Remove macOS display refresh rate support ([#2628](https://github.com/getsentry/sentry-dart/pull/2628))
+  - Can't reliably detect on multi-monitor systems and on older macOS versions.
+  - Not very meaningful, as other applications may be running in parallel and affecting it.
+
+### Dependencies
+
+- Bump Android SDK from v7.20.1 to v8.2.0 ([#2660](https://github.com/getsentry/sentry-dart/pull/2660), [#2713](https://github.com/getsentry/sentry-dart/pull/2713))
+  - [changelog](https://github.com/getsentry/sentry-java/blob/7.x.x/CHANGELOG.md#820)
+  - [diff](https://github.com/getsentry/sentry-java/compare/7.20.1...8.2.0)
+- Bump Native SDK from v0.7.19 to v0.7.20 ([#2652](https://github.com/getsentry/sentry-dart/pull/2652))
+  - [changelog](https://github.com/getsentry/sentry-native/blob/master/CHANGELOG.md#0720)
+  - [diff](https://github.com/getsentry/sentry-native/compare/0.7.19...0.7.20)
+- Bump Cocoa SDK from v8.44.0 to v8.45.0 ([#2718](https://github.com/getsentry/sentry-dart/pull/2718))
+  - [changelog](https://github.com/getsentry/sentry-cocoa/blob/main/CHANGELOG.md#8450)
+  - [diff](https://github.com/getsentry/sentry-cocoa/compare/8.44.0...8.45.0)
+
+## 8.13.3
+
+This release fixes an issue where Cold starts can be incorrectly reported as Warm starts on Android.
+
+### Dependencies
+
+- Bump Android SDK from v7.22.0 to v7.22.1 ([#2785](https://github.com/getsentry/sentry-dart/pull/2785))
+  - [changelog](https://github.com/getsentry/sentry-java/blob/7.x.x/CHANGELOG.md#7221)
+  - [diff](https://github.com/getsentry/sentry-java/compare/7.22.0...7.22.1)
+
+## 8.13.2
+
+> [!WARNING]
+> This release contains an issue where Cold starts can be incorrectly reported as Warm starts on Android. We recommend staying on version 8.12.0 if you use this feature on Android.
+> See issue [#2769](https://github.com/getsentry/sentry-dart/issues/2769) for more details.
+
+### Fixes
+
+- `build_web_compiler` error ([#2736](https://github.com/getsentry/sentry-dart/pull/2736))
+  - Use `if (dart.library.html)` instead of `if (dart.html)` for imports
+
+## 8.13.1
+
+> [!WARNING]
+> This release contains an issue where Cold starts can be incorrectly reported as Warm starts on Android. We recommend staying on version 8.12.0 if you use this feature on Android.
+> See issue [#2769](https://github.com/getsentry/sentry-dart/issues/2769) for more details.
+
+### Fixes
+
+- Replay video interruption if a `navigation` breadcrumb is missing `to` route info ([#2720](https://github.com/getsentry/sentry-dart/pull/2720))
+
+### Dependencies
+
+- Bump Android SDK from v7.20.1 to v7.22.0 ([#2705](https://github.com/getsentry/sentry-dart/pull/2705))
+  - [changelog](https://github.com/getsentry/sentry-java/blob/7.x.x/CHANGELOG.md#7220)
+  - [diff](https://github.com/getsentry/sentry-java/compare/7.20.1...7.22.0)
+
+## 8.13.0
+
+> [!WARNING]
+> This release contains an issue where Cold starts can be incorrectly reported as Warm starts on Android. We recommend staying on version 8.12.0 if you use this feature on Android.
+> See issue [#2769](https://github.com/getsentry/sentry-dart/issues/2769) for more details.
+
+### Breaking changes
+
+- Remove Metrics API ([#2571](https://github.com/getsentry/sentry-dart/pull/2571))
+  - The Metrics product never reached maturity from beta and has officially ended in October 7th, 2024
+  - Read [this post](https://sentry.zendesk.com/hc/en-us/articles/26369339769883-Metrics-Beta-Ended-on-October-7th) for more information
+
+### Features
+
+- Add `beforeCapture` for View Hierarchy ([#2523](https://github.com/getsentry/sentry-dart/pull/2523))
+  - View hierarchy calls are now debounced for 2 seconds.
+- JS SDK integration ([#2572](https://github.com/getsentry/sentry-dart/pull/2572))
+  - Enable the integration by setting `options.enableSentryJs = true`
+  - Features:
+    - Sending envelopes through Sentry JS transport layer
+    - Capturing native JS errors
+- Add SentryReplayQuality setting (`options.experimental.replay.quality`) ([#2582](https://github.com/getsentry/sentry-dart/pull/2582))
+- SPM Support ([#2280](https://github.com/getsentry/sentry-dart/pull/2280))
+
+### Enhancements
+
+- Replay: improve iOS native interop performance ([#2530](https://github.com/getsentry/sentry-dart/pull/2530), [#2573](https://github.com/getsentry/sentry-dart/pull/2573))
+- Replay: improve orientation change tracking accuracy on Android ([#2540](https://github.com/getsentry/sentry-dart/pull/2540))
+- Print a warning if the rate limit was reached ([#2595](https://github.com/getsentry/sentry-dart/pull/2595))
+- Add replay masking config to tags and report SDKs versions ([#2592](https://github.com/getsentry/sentry-dart/pull/2592))
+- Enable `options.debug` when in debug mode ([#2597](https://github.com/getsentry/sentry-dart/pull/2597))
 - Propagate sample seed in baggage header ([#2629](https://github.com/getsentry/sentry-dart/pull/2629))
   - Read more about the specs [here](https://develop.sentry.dev/sdk/telemetry/traces/#propagated-random-value)
 - Finish and start new transaction when tapping same element again ([#2623](https://github.com/getsentry/sentry-dart/pull/2623))
 
 ### Fixes
 
+- Replay: fix masking for frames captured during UI changes ([#2553](https://github.com/getsentry/sentry-dart/pull/2553), [#2657](https://github.com/getsentry/sentry-dart/pull/2657))
+- Replay: fix widget masks overlap when navigating between screens ([#2486](https://github.com/getsentry/sentry-dart/pull/2486), [#2576](https://github.com/getsentry/sentry-dart/pull/2576))
+- WASM compat for Drift ([#2580](https://github.com/getsentry/sentry-dart/pull/2580))
+- Fix image flickering when using `SentryAssetBundle` ([#2577](https://github.com/getsentry/sentry-dart/pull/2577))
 - Fix print recursion detection ([#2624](https://github.com/getsentry/sentry-dart/pull/2624))
+
+### Misc
+
+- Transfer ownership of `sentry_link` to Sentry. You can view the changelog for the previous versions [here](https://github.com/getsentry/sentry-dart/blob/main/link/CHANGELOG_OLD.md) ([#2338](https://github.com/getsentry/sentry-dart/pull/2338))
+  - No functional changes have been made. This version is identical to the previous one.
+  - Change license from Apache to MIT
 
 ### Dependencies
 
-- Bump Cocoa SDK from v8.44.0-beta.1 to v8.44.0 ([#2649](https://github.com/getsentry/sentry-dart/pull/2649))
+- Bump Native SDK from v0.7.17 to v0.7.19 ([#2578](https://github.com/getsentry/sentry-dart/pull/2578), [#2588](https://github.com/getsentry/sentry-dart/pull/2588))
+  - [changelog](https://github.com/getsentry/sentry-native/blob/master/CHANGELOG.md#0719)
+  - [diff](https://github.com/getsentry/sentry-native/compare/0.7.17...0.7.19)
+- Bump Android SDK from v7.19.0 to v7.20.1 ([#2536](https://github.com/getsentry/sentry-dart/pull/2536), [#2549](https://github.com/getsentry/sentry-dart/pull/2549), [#2593](https://github.com/getsentry/sentry-dart/pull/2593))
+  - [changelog](https://github.com/getsentry/sentry-java/blob/main/CHANGELOG.md#7201)
+  - [diff](https://github.com/getsentry/sentry-java/compare/7.20.0...7.20.1)
+- Bump Cocoa SDK from v8.42.0 to v8.44.0 ([#2542](https://github.com/getsentry/sentry-dart/pull/2542), [#2548](https://github.com/getsentry/sentry-dart/pull/2548), [#2598](https://github.com/getsentry/sentry-dart/pull/2598), [#2649](https://github.com/getsentry/sentry-dart/pull/2649))
   - [changelog](https://github.com/getsentry/sentry-cocoa/blob/main/CHANGELOG.md#8440)
-  - [diff](https://github.com/getsentry/sentry-cocoa/compare/8.44.0-beta.1...8.44.0)
+  - [diff](https://github.com/getsentry/sentry-cocoa/compare/8.42.0...8.44.0)
 
 ## 8.13.0-beta.3
 
@@ -393,7 +622,6 @@
   });
   ```
   - Replace deprecated `BeforeScreenshotCallback` with new `BeforeCaptureCallback`.
-
 
 ### Fixes
 

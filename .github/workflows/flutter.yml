@@ -112,14 +112,17 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
       - uses: subosito/flutter-action@f2c4f6686ca8e8d6e6d0f28410eeef506ed66aff # pin@v2.18.0
         with:
           channel: main
-      - run: flutter upgrade
+
       - run: flutter config --enable-swift-package-manager
+
       - name: Run on iOS
         if: matrix.target == 'ios'
         run: flutter build ios --no-codesign
+
       - name: Run on macOS
         if: matrix.target == 'macos'
         run: flutter build macos
@@ -177,6 +180,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       # To recreate baseline run: detekt -i flutter/android,flutter/example/android -b flutter/config/detekt-bl.xml -cb
-      - uses: natiginfo/action-detekt-all@6bf4342ea96f638ecced05cf7d7dc48acdecc854 # pin@1.23.7
+      - uses: natiginfo/action-detekt-all@45229fbbe47eaff1160b6c956d7ffe14dc23c206 # pin@1.23.8
         with:
           args: -i flutter/android,flutter/example/android --baseline flutter/config/detekt-bl.xml --jvm-target 1.8 --build-upon-default-config --all-rules
